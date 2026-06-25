@@ -24,14 +24,27 @@ no `pip install` tax.
 
 ## Install
 
+No registry account needed — install straight from the public GitHub repo:
+
 ```bash
-pip install aieasybatch                 # Python
-npm  install aieasybatch                 # JavaScript (Node 18+) — see js/README.md
+# Python:
+pip install git+https://github.com/liam499/easy-batch-prompting
+
+# JavaScript (Node 18+):
+npm install github:liam499/easy-batch-prompting
 ```
 
-Or **vendor it**: copy the single file [`aieasybatch.py`](aieasybatch.py) into your project
-and `import aieasybatch`. It's standard-library only, so there is nothing else to install —
-that's the point.
+Or **just grab the one file** — `aieasybatch.py` *is* the entire Python tool (standard-library
+only, nothing to install):
+
+```bash
+curl -O https://raw.githubusercontent.com/liam499/easy-batch-prompting/HEAD/aieasybatch.py
+python aieasybatch.py run examples/prompts.txt -m mock:a -o run.jsonl
+```
+
+> PyPI/npm publishing is also wired up (`pip install aieasybatch` / `npm install aieasybatch`
+> once released — see [RELEASING.md](RELEASING.md)), but the GitHub install above works today
+> with no signup.
 
 ## 30-second quickstart (no API key)
 

@@ -1,6 +1,6 @@
 {
-  "name": "aieasybatch — BYOK batch prompting",
-  "short_name": "aieasybatch",
+  "name": "Easy Batch Prompting",
+  "short_name": "Easy Batch",
   "description": "Fan a list of prompts across many models with your own key. Runs entirely in your browser.",
   "start_url": "./",
   "scope": "./",

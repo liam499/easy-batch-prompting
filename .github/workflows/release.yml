@@ -1,0 +1,43 @@
+name: Release
+
+# Publish on a version tag, e.g.:  git tag v0.1.0 && git push origin v0.1.0
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  pypi:
+    name: Publish to PyPI (trusted publishing, no token)
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write          # OIDC -> PyPI trusted publishing; no API token needed
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build
+      - run: python -m build
+      - uses: pypa/gh-action-pypi-publish@release/v1   # uploads dist/* via OIDC
+
+  npm:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write          # enables provenance attestation
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+      - run: node --test
+        working-directory: js
+      - run: npm publish --provenance --access public
+        working-directory: js
+        env:
+          # Set repo secret NPM_TOKEN (an npm "Automation" token). Or configure npm
+          # trusted publishing (OIDC) and drop this env entirely.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

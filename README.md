@@ -46,6 +46,24 @@ python aieasybatch.py run examples/prompts.txt -m mock:a -o run.jsonl
 > once released — see [RELEASING.md](RELEASING.md)), but the GitHub install above works today
 > with no signup.
 
+## In the browser — BYOK, no install
+
+There's a zero-backend **PWA** in [`web/`](web/): paste your own OpenRouter key (it stays in
+your browser's `localStorage` and is sent only to the model endpoint you pick), type prompts
+and model slugs — or hit *browse OpenRouter…* to search every model — and fan them out
+**client-side**. You get the live comparison grid, per-model cost/latency, and a *Download
+JSONL* that's byte-compatible with the CLI. An offline `mock` lets you try it with no key, and
+it's installable as an app.
+
+```bash
+cd web && python -m http.server        # then open http://localhost:8000
+```
+
+Or deploy it to GitHub Pages — Settings → Pages → Source: **GitHub Actions**;
+[`.github/workflows/pages.yml`](.github/workflows/pages.yml) publishes `web/` on every push to
+`main`. CORS note: browsers can only reach providers that allow it — OpenRouter does (and one
+key covers every model family), which is why it's the default.
+
 ## 30-second quickstart (no API key)
 
 The offline `mock` provider runs the whole pipeline with no keys and no network:

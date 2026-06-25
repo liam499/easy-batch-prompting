@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="aieasybatch">
+  <rect width="512" height="512" fill="#2563eb"/>
+  <g stroke="#ffffff" stroke-width="20" stroke-linecap="round" fill="#ffffff" transform="translate(256 256) scale(0.66) translate(-256 -256)">
+    <line x1="158" y1="256" x2="350" y2="148"/>
+    <line x1="158" y1="256" x2="350" y2="256"/>
+    <line x1="158" y1="256" x2="350" y2="364"/>
+    <circle cx="158" cy="256" r="40"/>
+    <circle cx="360" cy="148" r="28"/>
+    <circle cx="360" cy="256" r="28"/>
+    <circle cx="360" cy="364" r="28"/>
+  </g>
+</svg>

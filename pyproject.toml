@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aieasybatch"
+version = "0.1.0"
+description = "Brain-dead-simple batch prompting: a list of prompts x a roster of models -> one JSONL with every answer. Zero dependencies."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "liam499" }]
+keywords = ["llm", "batch", "prompting", "openai", "anthropic", "gemini", "openrouter", "fan-out"]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Intended Audience :: Developers",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []   # standard library only, on purpose
+
+[project.scripts]
+aieasybatch = "aieasybatch.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/liam499/easy-batch-prompting"
+Issues = "https://github.com/liam499/easy-batch-prompting/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+aieasybatch = ["viewer/template.html"]

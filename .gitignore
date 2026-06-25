@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+
+# Run outputs (JSONL is the tool's output format; don't commit stray runs)
+run_*.jsonl
+*.run.jsonl
+*.batch.json
+report.html
+
+# JS
+js/node_modules/
+js/dist/
+
+# OS
+.DS_Store

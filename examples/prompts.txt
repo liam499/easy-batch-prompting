@@ -1,0 +1,4 @@
+Summarize the French Revolution in two sentences.
+Write a haiku about TCP handshakes.
+Explain a hash map to a five-year-old.
+Name three causes of the 2008 financial crisis.

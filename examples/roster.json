@@ -1,0 +1,9 @@
+{
+  "_comment": "An illustrative live roster. Set the matching API keys before use. Model slugs drift over time. For an offline demo, swap these for mock:a / mock:b.",
+  "models": [
+    { "provider": "openai", "model": "gpt-4o-mini" },
+    { "provider": "anthropic", "model": "claude-haiku-4.5" },
+    { "provider": "gemini", "model": "gemini-2.0-flash" },
+    { "provider": "openrouter", "model": "meta-llama/llama-3.1-8b-instruct" }
+  ]
+}

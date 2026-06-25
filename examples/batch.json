@@ -1,0 +1,7 @@
+{
+  "_comment": "Roster for the 50%-off async batch path. `aieasybatch batch submit --roster examples/batch.json --handle run.batch.json`, then `aieasybatch batch collect run.batch.json -o answers.jsonl --wait`. OpenAI + Anthropic have native batch APIs; add --live-fallback to also run the rest live.",
+  "models": [
+    { "provider": "openai", "model": "gpt-4o-mini" },
+    { "provider": "anthropic", "model": "claude-3-5-haiku-latest" }
+  ]
+}

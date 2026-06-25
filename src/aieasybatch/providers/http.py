@@ -34,25 +34,21 @@ class HttpError(RuntimeError):
         self.attempts = attempts
 
 
-def request_json(url, *, headers=None, body=None, method="POST",
-                 timeout=60.0, max_retries=4):
-    """Send a JSON request and return the parsed JSON response.
+def request_bytes(url, *, headers=None, data=None, method="POST",
+                  timeout=60.0, max_retries=4) -> bytes:
+    """Send a request and return the raw response bytes (the base for everything else).
 
-    ``body`` is JSON-encoded when present (for GET, pass ``body=None``). Raises
-    ``HttpError`` on failure, after exhausting retries for transient errors.
+    ``data`` is sent verbatim (already-encoded body, or ``None`` for GET). Raises
+    ``HttpError`` on failure, after exhausting retries for transient errors. Used
+    directly by the batch bridge for multipart uploads and JSONL downloads.
     """
-    data = json.dumps(body).encode("utf-8") if body is not None else None
     hdrs = dict(headers or {})
-    if data is not None:
-        hdrs.setdefault("Content-Type", "application/json")
-
     delay, last = 2.0, None
     for attempt in range(max_retries):
         try:
             req = urllib.request.Request(url, data=data, headers=hdrs, method=method)
             with _OPENER.open(req, timeout=timeout) as resp:
-                raw = resp.read().decode("utf-8")
-                return json.loads(raw) if raw else {}
+                return resp.read()
         except urllib.error.HTTPError as e:
             code = e.code
             transient = (code == 429 or 500 <= code < 600)
@@ -71,6 +67,22 @@ def request_json(url, *, headers=None, body=None, method="POST",
         time.sleep(delay)
         delay *= 2
     raise last
+
+
+def request_json(url, *, headers=None, body=None, method="POST",
+                 timeout=60.0, max_retries=4):
+    """Send a JSON request and return the parsed JSON response.
+
+    ``body`` is JSON-encoded when present (for GET, pass ``body=None``).
+    """
+    hdrs = dict(headers or {})
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        hdrs.setdefault("Content-Type", "application/json")
+    raw = request_bytes(url, headers=hdrs, data=data, method=method,
+                        timeout=timeout, max_retries=max_retries)
+    return json.loads(raw.decode("utf-8")) if raw else {}
 
 
 def get_json(url, *, headers=None, timeout=60.0, max_retries=4):

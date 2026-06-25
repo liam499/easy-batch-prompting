@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<!--
+  aieasybatch — self-contained comparison viewer.
+  Zero dependencies: no CDN, no framework, no build. Open this file directly and drop a
+  run's .jsonl onto it, or generate a baked-in report with:  aieasybatch view run.jsonl -o report.html
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aieasybatch — comparison</title>
+<style>
+  :root {
+    --bg:#fbfbfd; --panel:#fff; --ink:#1d1d1f; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#2563eb; --err:#dc2626; --errbg:#fef2f2; --warnbg:#fffbeb; --chip:#f3f4f6;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--ink);
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  header { padding:18px 22px 12px; border-bottom:1px solid var(--line); background:var(--panel); position:sticky; top:0; z-index:5; }
+  h1 { margin:0; font-size:18px; letter-spacing:-.01em; }
+  h1 small { color:var(--muted); font-weight:400; font-size:13px; margin-left:8px; }
+  .controls { margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .controls input[type=search] { padding:6px 10px; border:1px solid var(--line); border-radius:8px; min-width:240px; font:inherit; }
+  .controls label { color:var(--muted); display:inline-flex; gap:5px; align-items:center; cursor:pointer; user-select:none; }
+  .summary { color:var(--muted); font-size:12.5px; margin-top:8px; }
+  .wrap { padding:16px 22px 60px; overflow:auto; }
+  table { border-collapse:separate; border-spacing:0; width:100%; }
+  th,td { border-bottom:1px solid var(--line); border-right:1px solid var(--line); vertical-align:top; text-align:left; }
+  thead th { position:sticky; top:0; background:var(--panel); z-index:3; padding:10px 12px; font-size:12.5px; }
+  thead th .modlabel { font-weight:600; font-size:13px; }
+  thead th .agg { color:var(--muted); font-weight:400; font-size:11.5px; margin-top:3px; white-space:nowrap; }
+  tbody th { position:sticky; left:0; background:var(--panel); z-index:2; padding:10px 12px; font-weight:500;
+             max-width:280px; min-width:200px; }
+  tbody th .pid { color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; }
+  td { padding:9px 11px; min-width:240px; max-width:420px; }
+  .cornercell { position:sticky; left:0; z-index:4; background:var(--panel); }
+  .cell { display:flex; flex-direction:column; gap:6px; }
+  .rep + .rep { border-top:1px dashed var(--line); padding-top:6px; }
+  .out { white-space:pre-wrap; word-break:break-word; max-height:8.5em; overflow:hidden; position:relative; cursor:pointer; }
+  .out.expanded { max-height:none; }
+  .out.clamped::after { content:""; position:absolute; left:0; right:0; bottom:0; height:1.6em;
+                        background:linear-gradient(transparent, var(--panel)); }
+  td.error { background:var(--errbg); }
+  td.error .out { color:var(--err); }
+  td.empty { background:var(--warnbg); }
+  .badges { display:flex; gap:5px; flex-wrap:wrap; }
+  .badge { background:var(--chip); color:var(--muted); border-radius:6px; padding:1px 6px; font-size:11px;
+           font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .badge.err { background:#fee2e2; color:var(--err); }
+  .miss { color:#cbd5e1; }
+  #drop { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(248,250,252,.97); z-index:20; }
+  #drop .box { border:2px dashed #cbd5e1; border-radius:16px; padding:48px 64px; text-align:center; color:var(--muted); }
+  #drop.show { display:flex; }
+  #drop.drag .box { border-color:var(--accent); color:var(--accent); }
+  code { background:var(--chip); padding:1px 5px; border-radius:5px; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>aieasybatch <small id="sub">— prompts × models comparison</small></h1>
+  <div class="controls">
+    <input type="search" id="q" placeholder="filter by prompt or answer text…" autocomplete="off">
+    <label><input type="checkbox" id="expand"> expand all answers</label>
+    <label><input type="checkbox" id="erronly"> only rows with an error</label>
+  </div>
+  <div class="summary" id="summary"></div>
+</header>
+
+<div class="wrap"><div id="grid"></div></div>
+
+<div id="drop"><div class="box">
+  <div style="font-size:30px;margin-bottom:8px">▽</div>
+  <div><b>Drop a run <code>.jsonl</code> here</b></div>
+  <div style="margin-top:6px">…or <a href="#" id="pick">choose a file</a>. Nothing leaves your browser.</div>
+  <input type="file" id="file" accept=".jsonl,.json,application/json" style="display:none">
+</div></div>
+
+<script type="application/json" id="aeb-data">__AEB_DATA__</script>
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => (s==null?"":String(s)).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmtCost = c => c==null ? "" : "$" + (Math.abs(c) < 0.01 ? Number(c).toFixed(6) : Number(c).toFixed(4));
+const fmtMs = m => m==null ? "" : (m>=1000 ? (m/1000).toFixed(1)+"s" : m+"ms");
+
+let RECORDS = null;
+
+function embedded() {
+  const el = $("#aeb-data"); if (!el) return null;
+  const raw = el.textContent.trim();
+  if (!raw || raw === "__AEB_DATA__") return null;
+  try { return JSON.parse(raw); } catch (e) { return null; }
+}
+
+function firstSeen(records, keyFn) {
+  const seen = new Map();
+  for (const r of records) { const k = keyFn(r); if (!seen.has(k)) seen.set(k, r); }
+  return seen;
+}
+
+function modelLabel(r){ return (r.provider||"?") + ":" + (r.model||"?"); }
+
+function aggregate(records, label) {
+  const rs = records.filter(r => modelLabel(r) === label);
+  let errors=0, empty=0, cost=0, tokens=0, lat=0, latN=0, haveCost=false;
+  for (const r of rs) {
+    if (r.error) errors++;
+    else if (!r.output) empty++;
+    if (r.cost_usd != null) { cost += r.cost_usd; haveCost = true; }
+    if (r.usage && r.usage.total_tokens != null) tokens += r.usage.total_tokens;
+    if (r.latency_ms != null) { lat += r.latency_ms; latN++; }
+  }
+  return { n: rs.length, errors, empty, cost: haveCost?cost:null, tokens,
+           meanLat: latN ? Math.round(lat/latN) : null };
+}
+
+function cellHtml(records) {
+  if (!records || !records.length) return '<span class="miss">—</span>';
+  return '<div class="cell">' + records.map(r => {
+    const isErr = !!r.error, isEmpty = !isErr && !r.output;
+    const text = isErr ? ("⚠ " + (r.error.message || r.error.type || "error"))
+                       : (r.output || "(empty)");
+    const badges = [];
+    if (r.usage && r.usage.total_tokens != null) badges.push('<span class="badge">'+r.usage.total_tokens+' tok</span>');
+    if (r.cost_usd != null) badges.push('<span class="badge">'+fmtCost(r.cost_usd)+'</span>');
+    if (r.latency_ms != null) badges.push('<span class="badge">'+fmtMs(r.latency_ms)+'</span>');
+    if (r.finish_reason && r.finish_reason !== "stop") badges.push('<span class="badge">'+esc(r.finish_reason)+'</span>');
+    if (isErr) badges.unshift('<span class="badge err">'+esc(r.error.type||"error")+'</span>');
+    const cls = "rep" + (isErr?" reperr":"") + (isEmpty?" repempty":"");
+    return '<div class="'+cls+'">'
+      + '<div class="out clamped" data-full>'+esc(text)+'</div>'
+      + (badges.length?'<div class="badges">'+badges.join("")+'</div>':'')
+      + '</div>';
+  }).join("") + '</div>';
+}
+
+function render(records) {
+  RECORDS = records || [];
+  const models = [...firstSeen(RECORDS, modelLabel).keys()];
+  const prompts = [...firstSeen(RECORDS, r => r.prompt_id != null ? r.prompt_id : r.prompt).values()];
+
+  // index: prompt key -> model label -> [records]
+  const idx = new Map();
+  for (const r of RECORDS) {
+    const pk = r.prompt_id != null ? r.prompt_id : r.prompt;
+    if (!idx.has(pk)) idx.set(pk, new Map());
+    const row = idx.get(pk);
+    const ml = modelLabel(r);
+    if (!row.has(ml)) row.set(ml, []);
+    row.get(ml).push(r);
+  }
+
+  const q = $("#q").value.trim().toLowerCase();
+  const errOnly = $("#erronly").checked;
+
+  let head = '<thead><tr><th class="cornercell">'+RECORDS.length+' records · '
+             + models.length + ' models · ' + prompts.length + ' prompts</th>';
+  for (const m of models) {
+    const a = aggregate(RECORDS, m);
+    const bits = [a.n + " calls"];
+    if (a.errors) bits.push('<span style="color:var(--err)">'+a.errors+" err</span>");
+    if (a.empty) bits.push(a.empty+" empty");
+    if (a.meanLat!=null) bits.push("~"+fmtMs(a.meanLat));
+    if (a.cost!=null) bits.push(fmtCost(a.cost));
+    head += '<th><div class="modlabel">'+esc(m)+'</div><div class="agg">'+bits.join(" · ")+'</div></th>';
+  }
+  head += '</tr></thead>';
+
+  let body = '<tbody>';
+  for (const p of prompts) {
+    const pk = p.prompt_id != null ? p.prompt_id : p.prompt;
+    const row = idx.get(pk) || new Map();
+    if (errOnly && ![...row.values()].some(rs => rs.some(r => r.error))) continue;
+    const hay = (p.prompt + " " + [...row.values()].flat().map(r => r.output||"").join(" ")).toLowerCase();
+    if (q && !hay.includes(q)) continue;
+    body += '<tr><th><div>'+esc(p.prompt)+'</div><div class="pid">#'+esc(String(p.prompt_id ?? ""))+'</div></th>';
+    for (const m of models) {
+      const rs = row.get(m) || [];
+      const klass = rs.some(r => r.error) ? " error" : (rs.length && rs.every(r => !r.output) ? " empty" : "");
+      body += '<td class="'+klass.trim()+'">'+cellHtml(rs)+'</td>';
+    }
+    body += '</tr>';
+  }
+  body += '</tbody>';
+  $("#grid").innerHTML = '<table>'+head+body+'</table>';
+  applyExpand();
+
+  // summary line
+  const tot = RECORDS.length, errs = RECORDS.filter(r=>r.error).length;
+  const cost = RECORDS.reduce((s,r)=> s + (r.cost_usd||0), 0);
+  const run = RECORDS[0] && RECORDS[0].run_id;
+  $("#summary").innerHTML = tot+" records · "+errs+" errors"
+    + (cost?(" · ~"+fmtCost(cost)+" total"):"")
+    + (run?(" · run "+esc(run)):"");
+}
+
+function applyExpand() {
+  const all = $("#expand").checked;
+  document.querySelectorAll(".out").forEach(el => {
+    el.classList.toggle("expanded", all);
+    el.classList.toggle("clamped", !all && el.scrollHeight > el.clientHeight + 2);
+  });
+}
+
+document.addEventListener("click", e => {
+  const out = e.target.closest(".out");
+  if (out) { out.classList.toggle("expanded"); out.classList.toggle("clamped", !out.classList.contains("expanded") && out.scrollHeight>out.clientHeight+2); }
+});
+$("#q").addEventListener("input", () => render(RECORDS));
+$("#erronly").addEventListener("change", () => render(RECORDS));
+$("#expand").addEventListener("change", applyExpand);
+
+// ---- file loading ----
+function parseJsonl(text) {
+  const recs = [];
+  for (const line of text.split(/\r?\n/)) {
+    const t = line.trim(); if (!t) continue;
+    try { recs.push(JSON.parse(t)); } catch (e) {}
+  }
+  if (!recs.length) { try { const a = JSON.parse(text); if (Array.isArray(a)) return a; } catch(e){} }
+  return recs;
+}
+function loadFile(file) {
+  const fr = new FileReader();
+  fr.onload = () => { const recs = parseJsonl(fr.result); if (recs.length) { $("#drop").classList.remove("show"); render(recs); } };
+  fr.readAsText(file);
+}
+const drop = $("#drop");
+["dragenter","dragover"].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("show","drag"); }));
+["dragleave","drop"].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); if (ev==="drop"||e.relatedTarget===null) drop.classList.remove("drag"); }));
+document.addEventListener("drop", e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) loadFile(f); });
+$("#pick").addEventListener("click", e => { e.preventDefault(); $("#file").click(); });
+$("#file").addEventListener("change", e => { const f = e.target.files[0]; if (f) loadFile(f); });
+
+// ---- init ----
+const initial = embedded();
+if (initial) render(initial);
+else { drop.classList.add("show"); $("#sub").textContent = "— drop a run .jsonl to compare"; }
+</script>
+</body>
+</html>

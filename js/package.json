@@ -1,0 +1,17 @@
+{
+  "name": "aieasybatch",
+  "version": "0.1.0",
+  "description": "Brain-dead-simple batch prompting: prompts × a roster of models → one JSONL with every answer. Zero dependencies.",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "index.d.ts",
+  "bin": { "aieasybatch": "src/cli.js" },
+  "exports": { ".": "./src/index.js" },
+  "engines": { "node": ">=18" },
+  "scripts": { "test": "node --test" },
+  "license": "MIT",
+  "keywords": ["llm", "batch", "prompting", "openai", "anthropic", "gemini", "fan-out"],
+  "files": ["src", "index.d.ts", "README.md"],
+  "dependencies": {},
+  "repository": { "type": "git", "url": "https://github.com/liam499/easy-batch-prompting" }
+}

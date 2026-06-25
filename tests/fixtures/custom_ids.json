@@ -1,0 +1,42 @@
+[
+  {
+    "provider": "openai",
+    "model": "gpt-4o-mini",
+    "prompt": "Hello, world.",
+    "system": null,
+    "repeat": 0,
+    "custom_id": "143648113b45c28c1c41074591b5c79d"
+  },
+  {
+    "provider": "anthropic",
+    "model": "claude-haiku-4.5",
+    "prompt": "Hello, world.",
+    "system": "Be terse.",
+    "repeat": 0,
+    "custom_id": "f664855636ddccec8feb1d701fab8ab1"
+  },
+  {
+    "provider": "openrouter",
+    "model": "meta-llama/llama-3.1-8b-instruct",
+    "prompt": "Why is the sky blue?",
+    "system": null,
+    "repeat": 2,
+    "custom_id": "0954d956ce6b5d31abae2711a65c1900"
+  },
+  {
+    "provider": "mock",
+    "model": "x",
+    "prompt": "unicode: café — 日本語 — 🚀",
+    "system": null,
+    "repeat": 0,
+    "custom_id": "d4d8e98010d65956e4a9d379c3ff462e"
+  },
+  {
+    "provider": "mock",
+    "model": "x",
+    "prompt": "",
+    "system": null,
+    "repeat": 1,
+    "custom_id": "5d5ebb15559e8343f0f4d0cb8beb6107"
+  }
+]

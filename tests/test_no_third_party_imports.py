@@ -14,8 +14,10 @@ PKG = Path(__file__).resolve().parent.parent / "src" / "aieasybatch"
 # Python 3.10+ ships the authoritative set; fall back to what we actually use on 3.8/3.9.
 _FALLBACK = {
     "__future__", "abc", "argparse", "ast", "base64", "collections", "concurrent",
-    "dataclasses", "datetime", "glob", "hashlib", "html", "importlib", "io", "json",
-    "os", "pathlib", "random", "re", "sys", "threading", "time", "typing", "urllib", "uuid",
+    "contextlib", "csv", "dataclasses", "datetime", "functools", "glob", "hashlib",
+    "html", "importlib", "io", "itertools", "json", "math", "os", "pathlib", "random",
+    "re", "shutil", "subprocess", "sys", "tempfile", "textwrap", "threading", "time",
+    "typing", "urllib", "uuid", "webbrowser",
 }
 STDLIB = set(getattr(sys, "stdlib_module_names", _FALLBACK)) | _FALLBACK
 

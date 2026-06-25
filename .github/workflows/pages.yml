@@ -1,7 +1,10 @@
 name: Deploy PWA to GitHub Pages
 
-# Publishes web/ to Pages. Self-enabling: the "Ensure Pages..." step flips Pages to the
-# "GitHub Actions" build type itself, so no manual Settings -> Pages -> Source change is needed.
+# Publishes web/ to GitHub Pages. Pages "Source" must be **GitHub Actions** (Settings -> Pages).
+# `enablement: true` below sets that automatically for a repo where Pages is NOT yet enabled.
+# Converting a site that was first enabled in "Deploy from a branch" mode is the one thing this
+# workflow can't do for you: the Actions GITHUB_TOKEN is barred from changing the Pages source
+# (that needs repo-admin), so flip it once by hand — or unpublish Pages and let this re-create it.
 on:
   push:
     branches: ["main"]
@@ -25,27 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Switch an existing branch-mode Pages site (or a brand-new one) to deploy from
-      # GitHub Actions, so the web/ artifact below is what gets served — not a Jekyll
-      # build of the repo root. configure-pages' `enablement` only fires when Pages is
-      # *not* already enabled, so an explicit build_type=workflow PUT is what reliably
-      # converts a site that was first enabled in "Deploy from a branch" mode.
-      - name: Ensure Pages deploys from GitHub Actions
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          repo="${{ github.repository }}"
-          curl -fsS -X PUT \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$repo/pages" \
-            -d '{"build_type":"workflow"}' \
-          || curl -fsS -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$repo/pages" \
-            -d '{"build_type":"workflow"}'
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web

@@ -8,7 +8,7 @@ from .common import collect_batch, submit_batch
 
 
 def add_cli(sub):
-    p = sub.add_parser("batch", help="run on providers' native 50%-off async batch APIs "
+    p = sub.add_parser("batch", help="run on providers' native 50%%-off async batch APIs "
                                      "(OpenAI, Anthropic); other providers via --live-fallback")
     bsub = p.add_subparsers(dest="batchcmd")
 

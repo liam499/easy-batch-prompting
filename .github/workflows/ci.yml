@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/setup-node@v4      # the cross-language test runs `node --test`
+        with:
+          node-version: "20"
+      - run: pip install pytest
+      - name: Test (incl. single-file parity, stdlib-only guard, cross-language)
+        run: PYTHONPATH=src python -m pytest -q
+
+  js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Test (JS port)
+        run: node --test
+        working-directory: js

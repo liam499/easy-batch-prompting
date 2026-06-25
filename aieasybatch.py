@@ -903,15 +903,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _maybe_add_optional(sub):
-    """Register the view/batch verbs if their modules are present (added in later phases)."""
-    try:
-        add_view(sub)
-    except Exception:
-        pass
-    try:
-        add_batch(sub)
-    except Exception:
-        pass
+    """Register the view/batch/lock verbs when present (package-only; absent from the
+    single-file build, where importing them fails and is silently skipped)."""
+    for module, attr in (("viewer", "add_cli"), ("bridge", "add_cli"), ("lock", "add_cli")):
+        try:
+            mod = __import__(f"aieasybatch.{module}", fromlist=[attr])
+            getattr(mod, attr)(sub)
+        except Exception:
+            pass
 
 
 def main(argv=None) -> int:

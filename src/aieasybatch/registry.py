@@ -53,8 +53,7 @@ def get_provider(spec):
         return _make_openai_compat(name, spec)
     if name == "anthropic":
         from .providers.anthropic import AnthropicProvider
-        return AnthropicProvider(model=spec.model, base_url=spec.base_url,
-                                 key_env=spec.key_env, max_tokens=spec.max_tokens)
+        return AnthropicProvider(model=spec.model, base_url=spec.base_url, key_env=spec.key_env)
     if name == "gemini":
         from .providers.gemini import GeminiProvider
         return GeminiProvider(model=spec.model, base_url=spec.base_url, key_env=spec.key_env)

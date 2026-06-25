@@ -15,6 +15,7 @@ from pathlib import Path
 import argparse
 import hashlib
 import json
+import os
 import random
 import sys
 import threading
@@ -379,6 +380,190 @@ class MockProvider(Provider):
                 "finish_reason": "stop", "synthetic": True}
         return text, meta
 
+# ===== providers/openai_compat.py =====
+# Bare model names (after any vendor prefix) that use the reasoning interface.
+_REASONING_PREFIXES = ("gpt-5", "o1", "o3", "o4")
+
+
+class OpenAICompatProvider(Provider):
+    name = "openai_compat"
+
+    def __init__(self, model, *, base_url, key_env=None, reasoning_effort=None,
+                 routing=None, extra_headers=None, provider_name=None,
+                 timeout=90.0, max_retries=4, api_key=None):
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.endpoint = self.base_url + "/chat/completions"
+        self.key_env = key_env
+        self.reasoning_effort = reasoning_effort
+        self.routing = routing                       # OpenRouter provider-routing block
+        self.extra_headers = dict(extra_headers or {})
+        self.provider_name = provider_name or "openai_compat"
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self.api_key = api_key or (os.environ.get(key_env) if key_env else None)
+        if key_env and not self.api_key:
+            raise ValueError(f"set {key_env} to use provider {self.provider_name!r} (model {model!r})")
+
+    def _is_reasoning(self):
+        tail = self.model.lower().split("/")[-1]      # tolerate vendor-prefixed slugs
+        return tail.startswith(_REASONING_PREFIXES)
+
+    def _payload(self, messages, sampling):
+        body = {"model": self.model, "messages": messages}
+        if self._is_reasoning():
+            body["max_completion_tokens"] = sampling.max_tokens
+            if self.reasoning_effort:
+                body["reasoning_effort"] = self.reasoning_effort
+            # temperature + top_p omitted: reasoning models only accept the defaults
+        else:
+            body["temperature"] = sampling.temperature
+            body["max_tokens"] = sampling.max_tokens
+            if sampling.top_p != 1.0:
+                body["top_p"] = sampling.top_p
+        if sampling.seed is not None:
+            body["seed"] = sampling.seed
+        if self.routing:
+            body["provider"] = self.routing
+        return body
+
+    def chat(self, messages, sampling):
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        headers.update(self.extra_headers)
+        body = request_json(self.endpoint, headers=headers,
+                            body=self._payload(messages, sampling),
+                            timeout=self.timeout, max_retries=self.max_retries)
+        if "choices" not in body:                     # some backends return errors as HTTP 200
+            err = body.get("error")
+            msg = (err.get("message") if isinstance(err, dict) else err) or str(body)[:300]
+            raise HttpError(f"no choices in response: {msg}", transient=False)
+        choice = (body.get("choices") or [{}])[0]
+        text = (choice.get("message") or {}).get("content") or ""
+        finish = choice.get("finish_reason")
+        meta = {
+            "usage": body.get("usage"),
+            "served_by": body.get("provider") or self.provider_name,
+            "model_returned": body.get("model"),
+            "response_id": body.get("id"),
+            "finish_reason": finish,
+            "reasoning_effort": self.reasoning_effort,
+        }
+        if not text and self._is_reasoning() and finish in ("length", None):
+            meta["empty_reason"] = "reasoning_starved"
+        return text, meta
+
+# ===== providers/anthropic.py =====
+_VERSION = "2023-06-01"
+
+
+class AnthropicProvider(Provider):
+    name = "anthropic"
+
+    def __init__(self, model, *, base_url=None, key_env=None,
+                 timeout=90.0, max_retries=4, api_key=None):
+        self.model = model.split("/", 1)[1] if model.startswith("anthropic/") else model
+        self.base_url = (base_url or "https://api.anthropic.com/v1").rstrip("/")
+        self.endpoint = self.base_url + "/messages"
+        self.key_env = key_env or "ANTHROPIC_API_KEY"
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self.api_key = api_key or os.environ.get(self.key_env)
+        if not self.api_key:
+            raise ValueError(f"set {self.key_env} to use the anthropic provider (model {model!r})")
+
+    def _payload(self, messages, sampling):
+        system = " ".join(m["content"] for m in messages if m["role"] == "system")
+        convo = [{"role": m["role"], "content": m["content"]}
+                 for m in messages if m["role"] != "system"]
+        body = {"model": self.model, "max_tokens": sampling.max_tokens,
+                "temperature": sampling.temperature, "messages": convo}
+        if system:
+            body["system"] = system
+        if sampling.top_p != 1.0:
+            body["top_p"] = sampling.top_p
+        return body
+
+    def chat(self, messages, sampling):
+        headers = {"x-api-key": self.api_key, "anthropic-version": _VERSION,
+                   "Content-Type": "application/json"}
+        body = request_json(self.endpoint, headers=headers,
+                            body=self._payload(messages, sampling),
+                            timeout=self.timeout, max_retries=self.max_retries)
+        if "content" not in body:
+            err = body.get("error")
+            msg = (err.get("message") if isinstance(err, dict) else err) or str(body)[:300]
+            raise HttpError(f"no content in response: {msg}", transient=False)
+        text = "".join(b.get("text", "") for b in body.get("content", [])
+                       if b.get("type") == "text")
+        usage = body.get("usage") or {}
+        meta = {
+            "usage": {"input_tokens": usage.get("input_tokens"),
+                      "output_tokens": usage.get("output_tokens")},
+            "served_by": "anthropic",
+            "model_returned": body.get("model"),
+            "response_id": body.get("id"),
+            "finish_reason": body.get("stop_reason"),
+        }
+        return text, meta
+
+# ===== providers/gemini.py =====
+class GeminiProvider(Provider):
+    name = "gemini"
+
+    def __init__(self, model, *, base_url=None, key_env=None,
+                 timeout=90.0, max_retries=4, api_key=None):
+        self.model = model.split("/", 1)[1] if model.startswith("models/") else model
+        self.base_url = (base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
+        self.key_env = key_env or "GEMINI_API_KEY"
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self.api_key = (api_key or os.environ.get(self.key_env)
+                        or os.environ.get("GOOGLE_API_KEY"))
+        if not self.api_key:
+            raise ValueError(f"set {self.key_env} to use the gemini provider (model {model!r})")
+
+    def _payload(self, messages, sampling):
+        contents, system = [], []
+        for m in messages:
+            if m["role"] == "system":
+                system.append(m["content"])
+                continue
+            role = "model" if m["role"] == "assistant" else "user"
+            contents.append({"role": role, "parts": [{"text": m["content"]}]})
+        cfg = {"temperature": sampling.temperature, "maxOutputTokens": sampling.max_tokens}
+        if sampling.top_p != 1.0:
+            cfg["topP"] = sampling.top_p
+        body = {"contents": contents, "generationConfig": cfg}
+        if system:
+            body["systemInstruction"] = {"parts": [{"text": " ".join(system)}]}
+        return body
+
+    def chat(self, messages, sampling):
+        url = f"{self.base_url}/models/{self.model}:generateContent"
+        headers = {"x-goog-api-key": self.api_key, "Content-Type": "application/json"}
+        body = request_json(url, headers=headers, body=self._payload(messages, sampling),
+                            timeout=self.timeout, max_retries=self.max_retries)
+        cands = body.get("candidates")
+        if not cands:
+            err = body.get("error")
+            msg = (err.get("message") if isinstance(err, dict) else err) or str(body)[:300]
+            raise HttpError(f"no candidates in response: {msg}", transient=False)
+        parts = (cands[0].get("content") or {}).get("parts") or []
+        text = "".join(p.get("text", "") for p in parts if "text" in p)
+        um = body.get("usageMetadata") or {}
+        meta = {
+            "usage": {"promptTokenCount": um.get("promptTokenCount"),
+                      "candidatesTokenCount": um.get("candidatesTokenCount"),
+                      "totalTokenCount": um.get("totalTokenCount")},
+            "served_by": "gemini",
+            "model_returned": body.get("modelVersion") or self.model,
+            "response_id": body.get("responseId"),
+            "finish_reason": cands[0].get("finishReason"),
+        }
+        return text, meta
+
 # ===== registry.py =====
 # name -> (base_url, key_env, options). key_env=None means "no key needed" (local).
 _OPENAI_COMPAT = {
@@ -419,8 +604,7 @@ def get_provider(spec):
     if name in _OPENAI_COMPAT:
         return _make_openai_compat(name, spec)
     if name == "anthropic":
-        return AnthropicProvider(model=spec.model, base_url=spec.base_url,
-                                 key_env=spec.key_env, max_tokens=spec.max_tokens)
+        return AnthropicProvider(model=spec.model, base_url=spec.base_url, key_env=spec.key_env)
     if name == "gemini":
         return GeminiProvider(model=spec.model, base_url=spec.base_url, key_env=spec.key_env)
     raise ValueError(
